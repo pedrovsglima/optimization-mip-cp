@@ -32,7 +32,9 @@ class FlowShop(ReadData):
             header_values = list(map(int, re.findall(r"\d+", lines[0])))
             num_jobs, num_machines, seed, upper_bound, lower_bound = header_values
 
-            processing_times = [int(x) for line in lines[2:] for x in line.split()]
+            processing_times = []
+            for line in lines[2:]:  # skip the "processing times :" line
+                processing_times.append(list(map(int, line.split())))
 
             instances.append({
                 "nb_jobs": num_jobs,
@@ -65,8 +67,13 @@ class JobShop(ReadData):
             times_start_idx = lines.index("Times") + 1
             machines_start_idx = lines.index("Machines") + 1
 
-            times = [int(x) for line in lines[times_start_idx:machines_start_idx - 1] for x in re.findall(r"\d+", line)]
-            machines = [int(x) for line in lines[machines_start_idx:] for x in re.findall(r"\d+", line)]
+            times = []
+            for line in lines[times_start_idx:machines_start_idx - 1]:
+                times.append(list(map(int, re.findall(r'\d+', line))))
+
+            machines = []
+            for line in lines[machines_start_idx:]:
+                machines.append(list(map(int, re.findall(r'\d+', line))))
 
             instances.append({
                 "nb_jobs": nb_jobs,
@@ -101,8 +108,13 @@ class OpenShop(ReadData):
             times_start_idx = lines.index("processing times :") + 1
             machines_start_idx = lines.index("machines :") + 1
 
-            times = [int(x) for line in lines[times_start_idx:machines_start_idx - 1] for x in re.findall(r"\d+", line)]
-            machines = [int(x) for line in lines[machines_start_idx:] for x in re.findall(r"\d+", line)]
+            times = []
+            for line in lines[times_start_idx:machines_start_idx - 1]:
+                times.append(list(map(int, re.findall(r'\d+', line))))
+
+            machines = []
+            for line in lines[machines_start_idx:]:
+                machines.append(list(map(int, re.findall(r'\d+', line))))
 
             instances.append({
                 "nb_jobs": nb_jobs,
