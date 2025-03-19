@@ -1,0 +1,11 @@
+[data]
+directory = "./data"
+flow_prefix = "flowshop_"
+job_prefix = "jobshop_"
+open_prefix = "openshop_"
+
+[optimization]
+time_limit = [15, 30]  # in seconds
+
+[results]
+csv_path = "./log/results.csv"
