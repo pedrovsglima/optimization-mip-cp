@@ -120,7 +120,3 @@ if __name__ == "__main__":
                 logger.info("File: %s, Instance: %s", file_path, instance)
 
                 main(data, time_limit, save_info)
-
-                break
-            break
-        break
