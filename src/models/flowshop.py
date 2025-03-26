@@ -9,42 +9,42 @@ def model(num_jobs: int, num_machines: int, processing_times: np.ndarray):
     model = pulp.LpProblem("FlowShop", pulp.LpMinimize)
 
     # Decision Variables
-    C = [[pulp.LpVariable(f"C_{i}_{j}", lowBound=0) for j in range(num_machines)] for i in range(num_jobs)]
-    x = [[pulp.LpVariable(f"x_{i}_{k}", cat="Binary") for k in range(num_jobs)] for i in range(num_jobs)]
-    C_max = pulp.LpVariable("C_max", lowBound=0)
+    C = pulp.LpVariable.dicts("C", [(i, j) for i in range(num_jobs) for j in range(num_machines)], lowBound=0, cat="Continuous")
+    y = pulp.LpVariable.dicts("y", [(i, i_) for i in range(num_jobs) for i_ in range(num_jobs) if i != i_], cat="Binary")
+    C_max = pulp.LpVariable("C_max", lowBound=0, cat="Continuous")
 
     # Objective: Minimize makespan
     model += C_max
 
     # Constraints
-    # 1. Each job is assigned exactly once
+    # 1. First machine processing constraint
     for i in range(num_jobs):
-        model += pulp.lpSum(x[i][k] for k in range(num_jobs)) == 1
+        model += C[i, 0] >= processing_times[i][0]
 
-    # 2. Each position gets only one job
-    for k in range(num_jobs):
-        model += pulp.lpSum(x[i][k] for i in range(num_jobs)) == 1
-
-    # 3. First machine processing constraint
+    # 2. Sequential processing on machines
     for i in range(num_jobs):
-        # model += C[i][0] >= processing_times[i][0]
-        model += C[i][0] >= pulp.lpSum(x[i][k] * processing_times[i][0] for k in range(num_jobs))
+        for j in range(1, num_machines):
+            model += C[i, j] >= C[i, j - 1] + processing_times[i][j]
 
-    # 4. Sequential job execution on the same machine
-    for j in range(1, num_machines):
-        for i in range(num_jobs):
-            # model += C[i][j] >= C[i][j - 1] + processing_times[i][j]
-            model += C[i][j] >= C[i][j - 1] + pulp.lpSum(x[i][k] * processing_times[i][j] for k in range(num_jobs))
-
-    # 5. Job precedence (No overlapping jobs on the same machine)
+    # 3. No Overlapping Constraint (Job Ordering)
     M = 1e6  # Large constant for Big-M constraint
-    for i in range(1, num_jobs):
-        for k in range(num_jobs):
-            for j in range(num_machines):
-                model += C[i][j] >= C[i-1][j] + processing_times[i][j] - M * (1 - x[i][k])
-
-    # 6. Makespan constraint
     for i in range(num_jobs):
-        model += C_max >= C[i][num_machines - 1]
+        for i_ in range(num_jobs):
+            if i != i_:
+                for j in range(num_machines):
+                    model += C[i, j] >= C[i_, j] + processing_times[i][j] - M * (1 - y[i, i_])
+                    model += C[i_, j] >= C[i, j] + processing_times[i_][j] - M * y[i, i_]
 
-    return model, C, x, C_max
+    # 4. Consistency in Job Precedence (Transitivity)
+    # TODO: também testar sem essa restrição
+    for i in range(num_jobs):
+        for i_ in range(num_jobs):
+            for i__ in range(num_jobs):
+                if i != i_ and i_ != i__ and i != i__:
+                    model += y[i, i__] >= y[i, i_] + y[i_, i__] - 1
+
+    # 5. Makespan constraint
+    for i in range(num_jobs):
+        model += C_max >= C[i, num_machines - 1]
+
+    return model, C, y, C_max

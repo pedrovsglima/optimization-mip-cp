@@ -36,7 +36,7 @@ def main(input_data:dict, time_limit:int, all_info:dict) -> None:
                 num_jobs, num_machines, time_limit)
 
     # create model and solver
-    model, C, x, C_max = flowshop.model(num_jobs, num_machines, processing_times)
+    model, C, y, C_max = flowshop.model(num_jobs, num_machines, processing_times)
 
     solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=time_limit, options=[f"randomSeed {seed}"])
 
@@ -56,15 +56,18 @@ def main(input_data:dict, time_limit:int, all_info:dict) -> None:
     lower_bound = input_data["lower_bound"]
     logger.info("Known Upper Bound: %d, Known Lower Bound: %d", upper_bound, lower_bound)
 
-    if objective <= lower_bound:
-        logger.info("Optimal solution found")
-    elif lower_bound < objective <= upper_bound:
-        logger.info("Feasible solution: %d, but may be improved", objective)
+    if status == 0:
+        logger.info("Could not find an optimal solution within the time limit")
     else:
-        logger.info("Solution %d is above the known upper bound", objective)
+        if objective <= lower_bound:
+            logger.info("Optimal solution found")
+        elif lower_bound < objective <= upper_bound:
+            logger.info("Feasible solution: %d, but may be improved", objective)
+        else:
+            logger.info("Solution %d is above the known upper bound", objective)
 
-    gap = ((objective - lower_bound) / (upper_bound - lower_bound)) * 100
-    logger.info("Performance Gap: %.2f%%", gap)
+        gap = ((objective - lower_bound) / (upper_bound - lower_bound)) * 100
+        logger.info("Performance Gap: %.2f%%", gap)
 
     # info to csv
     csv_path = config["results"]["csv_path"]
@@ -117,3 +120,7 @@ if __name__ == "__main__":
                 logger.info("File: %s, Instance: %s", file_path, instance)
 
                 main(data, time_limit, save_info)
+
+                break
+            break
+        break
