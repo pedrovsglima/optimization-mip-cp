@@ -3,7 +3,6 @@ import toml
 import logging
 from src import read_instances, problems
 
-
 # set up logging
 logging.basicConfig(
     filename="./log/experiments.log", level=logging.INFO,
@@ -19,11 +18,6 @@ with open("config.toml", "r") as f:
 if __name__ == "__main__":
 
     image_dir = config["data"]["directory"]
-
-    # open shop
-    # file_path = "data/openshop_tai4_4.txt"
-    # open_shop = read_instances.OpenShop(file_path)
-    # print(open_shop.data[2])
 
     # flow shop
     flowshop_prefix = config["data"]["flow_prefix"]
@@ -64,3 +58,22 @@ if __name__ == "__main__":
                 logger.info("Status: %s, Objective: %s, Runtime: %s", status, objective, runtime)
 
                 js.save_results(config["results"]["csv_path"], time_limit, status, objective, runtime, save_info)
+
+    # open shop
+    openshop_prefix = config["data"]["open_prefix"]
+    openshop_files = [os.path.join(image_dir, f)
+                      for f in os.listdir(image_dir) if openshop_prefix in f]
+    for file_path in openshop_files:
+        os_instances = read_instances.OpenShop(file_path)
+        for instance, data in enumerate(os_instances.data):
+            for time_limit in config["optimization"]["time_limit"]:
+
+                save_info = {"file": file_path, "instance": instance}
+                logger.info("-----------------------------------------")
+                logger.info("File: %s, Instance: %s", file_path, instance)
+
+                opens = problems.OpenShopProblem(data)
+                status, objective, runtime = opens.solve_prob(time_limit)
+                logger.info("Status: %s, Objective: %s, Runtime: %s", status, objective, runtime)
+
+                opens.save_results(config["results"]["csv_path"], time_limit, status, objective, runtime, save_info)

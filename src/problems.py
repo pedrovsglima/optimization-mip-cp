@@ -178,3 +178,56 @@ class JobShopProblem(SchedulingProblem):
             model += C_max >= C[i, last_machine]
 
         return model, C, y, C_max
+
+class OpenShopProblem(SchedulingProblem):
+    """A class representing an open shop scheduling problem."""
+
+    def __init__(self, data:dict):
+        super().__init__(data)
+        self.num_jobs = data["nb_jobs"]
+        self.num_machines = data["nb_machines"]
+        self.processing_times = data["times"]
+        self.job_operations = data["machines"]
+        self.seed = str(data["time_seed"])
+        self.machine_seed = str(data["machine_seed"])
+
+        if len(self.processing_times) != self.num_jobs or len(self.processing_times[0]) != self.num_machines:
+            raise ValueError("The dimensions of processing_times do not match num_jobs and num_machines.")
+        if len(self.job_operations) != self.num_jobs or len(self.job_operations[0]) != self.num_machines:
+            raise ValueError("The dimensions of job_operations do not match num_jobs and num_machines.")
+
+    def _get_model(
+            self
+    ) -> tuple[
+        pulp.LpProblem,
+        dict[tuple[int, int], pulp.LpVariable],
+        dict[tuple[int, int], pulp.LpVariable],
+        pulp.LpVariable
+    ]:
+        """Formulate the open shop scheduling problem using PuLP."""
+
+        model = pulp.LpProblem("OpenShop", pulp.LpMinimize)
+
+        # Decision variables
+        C = pulp.LpVariable.dicts("C", [(i, j) for i in range(self.num_jobs) for j in range(self.num_machines)], lowBound=0)
+        y = pulp.LpVariable.dicts("y", [(i, i_, j) for i in range(self.num_jobs) for i_ in range(self.num_jobs) if i != i_ for j in range(self.num_machines)], cat="Binary")
+        C_max = pulp.LpVariable("C_max", lowBound=0)
+
+        # Objective: minimize makespan
+        model += C_max
+
+        # Constraints
+        # Disjunctive machine constraints (if job i precedes job i' on machine j)
+        for j in range(self.num_machines):
+            for i in range(self.num_jobs):
+                for i_ in range(self.num_jobs):
+                    if i != i_:
+                        model += C[i, j] >= C[i_, j] + self.processing_times[i][j] - self.big_m * (1 - y[i, i_, j])
+                        model += C[i_, j] >= C[i, j] + self.processing_times[i_][j] - self.big_m * y[i, i_, j]
+
+        # Makespan constraint
+        for i in range(self.num_jobs):
+            for j in range(self.num_machines):
+                model += C_max >= C[i, j] + self.processing_times[i][j]
+
+        return model, C, y, C_max
