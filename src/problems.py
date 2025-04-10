@@ -28,7 +28,7 @@ class SchedulingProblem:
         # TODO: store optimal schedule
         # TODO: create and save gantt chart
 
-        model, C, y, C_max = self._get_model()
+        model, *decision_vars = self._get_model()
 
         solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=time_limit, options=[f"randomSeed {self.seed}"])
 
@@ -38,7 +38,7 @@ class SchedulingProblem:
         objective = pulp.value(model.objective)
         runtime = time.time() - start_time
 
-        return status, objective, runtime
+        return status, objective, runtime, decision_vars
 
     def save_results(
             self,
@@ -211,13 +211,14 @@ class OpenShopProblem(SchedulingProblem):
         # Decision variables
         C = pulp.LpVariable.dicts("C", [(i, j) for i in range(self.num_jobs) for j in range(self.num_machines)], lowBound=0)
         y = pulp.LpVariable.dicts("y", [(i, i_, j) for i in range(self.num_jobs) for i_ in range(self.num_jobs) if i != i_ for j in range(self.num_machines)], cat="Binary")
+        z = pulp.LpVariable.dicts("z", [(i, j, j_) for i in range(self.num_jobs) for j in range(self.num_machines) for j_ in range(self.num_machines) if j != j_], cat="Binary")
         C_max = pulp.LpVariable("C_max", lowBound=0)
 
         # Objective: minimize makespan
         model += C_max
 
         # Constraints
-        # Disjunctive machine constraints (if job i precedes job i' on machine j)
+        # Disjunctive constraints for jobs on the same machine
         for j in range(self.num_machines):
             for i in range(self.num_jobs):
                 for i_ in range(self.num_jobs):
@@ -225,9 +226,17 @@ class OpenShopProblem(SchedulingProblem):
                         model += C[i, j] >= C[i_, j] + self.processing_times[i][j] - self.big_m * (1 - y[i, i_, j])
                         model += C[i_, j] >= C[i, j] + self.processing_times[i_][j] - self.big_m * y[i, i_, j]
 
+        # Disjunctive constraints for jobs on different machines
+        for i in range(self.num_jobs):
+            for j in range(self.num_machines):
+                for j_ in range(self.num_machines):
+                    if j != j_:
+                        model += C[i, j] >= C[i, j_] + self.processing_times[i][j] - self.big_m * (1 - z[i, j, j_])
+                        model += C[i, j_] >= C[i, j] + self.processing_times[i][j_] - self.big_m * z[i, j, j_]
+
         # Makespan constraint
         for i in range(self.num_jobs):
             for j in range(self.num_machines):
                 model += C_max >= C[i, j] + self.processing_times[i][j]
 
-        return model, C, y, C_max
+        return model, C, y, z, C_max
