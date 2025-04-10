@@ -7,8 +7,8 @@ import pulp
 class SchedulingProblem:
     """A class representing a scheduling problem."""
 
-    HEADER = ["file", "instance", "num_jobs", "num_machines", "time_limit",
-            "result_status", "result_objective", "result_runtime", "upper_bound", "lower_bound"]
+    HEADER = ["file", "instance", "num_jobs", "num_machines", "time_limit", "result_status",
+            "result_objective", "result_runtime", "solution_is_valid", "upper_bound", "lower_bound"]
 
     def __init__(self, data:dict, M:int=1e6):
         self.upper_bound = data["upper_bound"]
@@ -20,6 +20,9 @@ class SchedulingProblem:
         self.seed = None
 
     def _get_model(self):
+        raise NotImplementedError("Subclasses should implement this method.")
+
+    def _verify_solution(self, solution:dict) -> bool:
         raise NotImplementedError("Subclasses should implement this method.")
 
     def solve_prob(self, time_limit:int) -> tuple[int, int, float]:
@@ -38,7 +41,9 @@ class SchedulingProblem:
         objective = pulp.value(model.objective)
         runtime = time.time() - start_time
 
-        return status, objective, runtime, decision_vars
+        solution_is_valid = self._verify_solution(decision_vars)
+
+        return status, objective, runtime, solution_is_valid
 
     def save_results(
             self,
@@ -47,6 +52,7 @@ class SchedulingProblem:
             status:int,
             objective:int,
             runtime:float,
+            solution_is_valid:bool,
             all_info:dict
     ) -> None:
         """Save the results to a CSV file."""
@@ -57,6 +63,7 @@ class SchedulingProblem:
         all_info["result_status"] = status
         all_info["result_objective"] = objective
         all_info["result_runtime"] = runtime
+        all_info["solution_is_valid"] = solution_is_valid
         all_info["upper_bound"] = self.upper_bound
         all_info["lower_bound"] = self.lower_bound
 
@@ -120,6 +127,41 @@ class FlowShopProblem(SchedulingProblem):
 
         return model, C, y, C_max
 
+    def _verify_solution(self, solution:dict) -> bool:
+        """Verify the solution for the flow shop problem."""
+        C = solution[0]
+        y = solution[1]
+        C_max = solution[2]
+
+        C_vals = {(i, j): pulp.value(var) for (i, j), var in C.items()}
+        y_vals = {(i, i_): pulp.value(var) for (i, i_), var in y.items()}
+        C_max_val = pulp.value(C_max)
+
+        # 1. Machine order consistency
+        for i in range(self.num_jobs):
+            for j in range(1, self.num_machines):
+                if C_vals[i, j] < C_vals[i, j - 1] + self.processing_times[i][j] - 1e-4:
+                    return False
+
+        # 2. Job ordering (no overlapping)
+        for i in range(self.num_jobs):
+            for i_ in range(self.num_jobs):
+                if i != i_:
+                    for j in range(self.num_machines):
+                        if y_vals[i, i_] > 0.5:
+                            if C_vals[i, j] < C_vals[i_, j] + self.processing_times[i][j] - 1e-4:
+                                return False
+                        else:
+                            if C_vals[i_, j] < C_vals[i, j] + self.processing_times[i_][j] - 1e-4:
+                                return False
+
+        # 3. Makespan constraint
+        for i in range(self.num_jobs):
+            if C_max_val < C_vals[i, self.num_machines - 1] - 1e-4:
+                return False
+
+        return True
+
 class JobShopProblem(SchedulingProblem):
     """A class representing a job shop scheduling problem."""
 
@@ -178,6 +220,44 @@ class JobShopProblem(SchedulingProblem):
             model += C_max >= C[i, last_machine]
 
         return model, C, y, C_max
+
+    def _verify_solution(self, solution:dict) -> bool:
+        """Verify the solution for the job shop problem."""
+        C = solution[0]
+        y = solution[1]
+        C_max = solution[2]
+
+        C_vals = {(i, j): pulp.value(var) for (i, j), var in C.items()}
+        y_vals = {(i, i_): pulp.value(var) for (i, i_), var in y.items()}
+        C_max_val = pulp.value(C_max)
+
+        # 1. Operation sequence within each job
+        for i in range(self.num_jobs):
+            for k in range(1, self.num_machines):
+                prev_machine = self.job_operations[i][k - 1] - 1
+                curr_machine = self.job_operations[i][k] - 1
+                if C_vals[i, curr_machine] < C_vals[i, prev_machine] + self.processing_times[i][prev_machine] - 1e-4:
+                    return False
+
+        # 2. No overlapping on the same machine
+        for j in range(self.num_machines):
+            for i in range(self.num_jobs):
+                for i_ in range(self.num_jobs):
+                    if i != i_ and (i, i_) in y_vals:
+                        if y_vals[i, i_] > 0.5:
+                            if C_vals[i_, j] < C_vals[i, j] + self.processing_times[i][j] - 1e-4:
+                                return False
+                        else:
+                            if C_vals[i, j] < C_vals[i_, j] + self.processing_times[i_][j] - 1e-4:
+                                return False
+
+        # 3. Makespan constraint
+        for i in range(self.num_jobs):
+            last_machine = self.job_operations[i][-1] - 1
+            if C_max_val < C_vals[i, last_machine] - 1e-4:
+                return False
+
+        return True
 
 class OpenShopProblem(SchedulingProblem):
     """A class representing an open shop scheduling problem."""
@@ -240,3 +320,47 @@ class OpenShopProblem(SchedulingProblem):
                 model += C_max >= C[i, j] + self.processing_times[i][j]
 
         return model, C, y, z, C_max
+
+    def _verify_solution(self, solution:dict) -> bool:
+        """Verify the solution for the open shop problem."""
+        C = solution[0]
+        y = solution[1]
+        z = solution[2]
+        C_max = solution[3]
+
+        C_vals = {(i, j): pulp.value(var) for (i, j), var in C.items()}
+        y_vals = {(i, i_, j): pulp.value(var) for (i, i_, j), var in y.items()}
+        z_vals = {(i, j, j_): pulp.value(var) for (i, j, j_), var in z.items()}
+        C_max_val = pulp.value(C_max)
+
+        # 1. No overlapping on the same machine
+        for j in range(self.num_machines):
+            for i in range(self.num_jobs):
+                for i_ in range(self.num_jobs):
+                    if i != i_ and (i, i_, j) in y_vals:
+                        if y_vals[i, i_, j] > 0.5:
+                            if C_vals[i_, j] < C_vals[i, j] + self.processing_times[i][j] - 1e-4:
+                                return False
+                        else:
+                            if C_vals[i, j] < C_vals[i_, j] + self.processing_times[i_][j] - 1e-4:
+                                return False
+
+        # 2. No overlapping within the same job
+        for i in range(self.num_jobs):
+            for j in range(self.num_machines):
+                for j_ in range(self.num_machines):
+                    if j != j_ and (i, j, j_) in z_vals:
+                        if z_vals[i, j, j_] > 0.5:
+                            if C_vals[i, j_] < C_vals[i, j] + self.processing_times[i][j] - 1e-4:
+                                return False
+                        else:
+                            if C_vals[i, j] < C_vals[i, j_] + self.processing_times[i][j_] - 1e-4:
+                                return False
+
+        # 3. Makespan constraint
+        for i in range(self.num_jobs):
+            for j in range(self.num_machines):
+                if C_max_val < C_vals[i, j] + self.processing_times[i][j] - 1e-4:
+                    return False
+
+        return True

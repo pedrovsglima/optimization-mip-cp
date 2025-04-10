@@ -34,10 +34,10 @@ if __name__ == "__main__":
                 logger.info("File: %s, Instance: %s", file_path, instance)
 
                 fs = problems.FlowShopProblem(data)
-                status, objective, runtime = fs.solve_prob(time_limit)
+                status, objective, runtime, solution_is_valid = fs.solve_prob(time_limit)
                 logger.info("Status: %s, Objective: %s, Runtime: %s", status, objective, runtime)
 
-                fs.save_results(config["results"]["csv_path"], time_limit, status, objective, runtime, save_info)
+                fs.save_results(config["results"]["csv_path"], time_limit, status, objective, runtime, solution_is_valid, save_info)
 
     # job shop
     jobshop_prefix = config["data"]["job_prefix"]
@@ -54,10 +54,10 @@ if __name__ == "__main__":
                 logger.info("File: %s, Instance: %s", file_path, instance)
 
                 js = problems.JobShopProblem(data)
-                status, objective, runtime = js.solve_prob(time_limit)
+                status, objective, runtime, solution_is_valid = js.solve_prob(time_limit)
                 logger.info("Status: %s, Objective: %s, Runtime: %s", status, objective, runtime)
 
-                js.save_results(config["results"]["csv_path"], time_limit, status, objective, runtime, save_info)
+                js.save_results(config["results"]["csv_path"], time_limit, status, objective, runtime, solution_is_valid, save_info)
 
     # open shop
     openshop_prefix = config["data"]["open_prefix"]
@@ -73,7 +73,7 @@ if __name__ == "__main__":
                 logger.info("File: %s, Instance: %s", file_path, instance)
 
                 opens = problems.OpenShopProblem(data)
-                status, objective, runtime = opens.solve_prob(time_limit)
+                status, objective, runtime, solution_is_valid = opens.solve_prob(time_limit)
                 logger.info("Status: %s, Objective: %s, Runtime: %s", status, objective, runtime)
 
-                opens.save_results(config["results"]["csv_path"], time_limit, status, objective, runtime, save_info)
+                opens.save_results(config["results"]["csv_path"], time_limit, status, objective, runtime, solution_is_valid, save_info)
