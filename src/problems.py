@@ -191,33 +191,130 @@ class JobShopProblem(SchedulingProblem):
         model = pulp.LpProblem("JobShop", pulp.LpMinimize)
 
         # Decision variables
-        C = pulp.LpVariable.dicts("C", [(i, j) for i in range(self.num_jobs) for j in range(self.num_machines)], lowBound=0)
-        y = pulp.LpVariable.dicts("y", [(i, i_) for i in range(self.num_jobs) for i_ in range(self.num_jobs) if i != i_], cat="Binary")
+        # C = pulp.LpVariable.dicts("C", [(i, j) for i in range(self.num_jobs) for j in range(self.num_machines)], lowBound=0)
+        # y = pulp.LpVariable.dicts("y", [(i, i_) for i in range(self.num_jobs) for i_ in range(self.num_jobs) if i != i_], cat="Binary")
+        # C_max = pulp.LpVariable("C_max", lowBound=0)
+        
+        # C = pulp.LpVariable.dicts(
+        #     "C",
+        #     [(i, o) for i in range(self.num_jobs) 
+        #            for o in range(self.num_machines)],
+        #     lowBound=0
+        # )
+        # y = pulp.LpVariable.dicts(
+        #     "y",
+        #     [(i, o, k, o_) 
+        #      for i in range(self.num_jobs) 
+        #      for o in range(self.num_machines)
+        #      for k in range(self.num_jobs) 
+        #      for o_ in range(self.num_machines)
+        #      if i != k
+        #     ],
+        #     cat="Binary"
+        # )
+        # C_max = pulp.LpVariable("C_max", lowBound=0)
+        
+        C = pulp.LpVariable.dicts(
+            "C", 
+            [(i, k) for i in range(self.num_jobs) 
+                   for k in range(self.num_machines)],
+            lowBound=0
+        )
+        # Binary precedence variables - optimized creation
+        y = {}
+        machine_ops = {}  # {machine: [(job, op_index)]}
+        # Pre-process: Group operations by machine
+        for i in range(self.num_jobs):
+            for k in range(self.num_machines):
+                m = self.job_operations[i][k] - 1  # Convert to 0-index
+                if m not in machine_ops:
+                    machine_ops[m] = []
+                machine_ops[m].append((i, k))
+        # Create only necessary precedence variables
+        for m in machine_ops:
+            ops = machine_ops[m]
+            for idx1, (i, k) in enumerate(ops):
+                for idx2, (ip, kp) in enumerate(ops):
+                    if i < ip:  # Avoid duplicates and ensure i < ip
+                        y[(i, k, ip, kp)] = pulp.LpVariable(
+                            f"y_{i}_{k}_{ip}_{kp}", cat="Binary")
         C_max = pulp.LpVariable("C_max", lowBound=0)
 
         # Objective: minimize makespan
         model += C_max
 
         # Constraints
-        # Sequence constraints within a job
+        # # Sequence constraints within a job
+        # for i in range(self.num_jobs):
+        #     for k in range(1, self.num_machines):
+        #         prev = self.job_operations[i][k - 1] - 1  # -1 for 0-indexing
+        #         curr = self.job_operations[i][k] - 1  # -1 for 0-indexing
+        #         model += C[i, curr] >= C[i, prev] + self.processing_times[i][prev]
+
+        # # No overlapping constraint (job ordering)
+        # for j in range(self.num_machines):
+        #     for i in range(self.num_jobs):
+        #         for i_ in range(self.num_jobs):
+        #             if i != i_:# and (j+1) in self.job_operations[i] and (j+1) in self.job_operations[i_]:
+        #                 model += C[i, j] >= C[i_, j] + self.processing_times[i][j] - self.big_m * (1 - y[i, i_])
+        #                 model += C[i_, j] >= C[i, j] + self.processing_times[i_][j] - self.big_m * y[i, i_]
+
+        # # Makespan constraint
+        # for i in range(self.num_jobs):
+        #     last_machine = self.job_operations[i][-1] - 1  # -1 for 0-indexing
+        #     model += C_max >= C[i, last_machine]
+        
+        # NOVO
+        # for i in range(self.num_jobs):
+        #     # Operation precedence (job-specific sequence)
+        #     for o in range(1, self.num_machines):
+        #         model += C[i, o] >= C[i, o-1] + self.processing_times[i][self.job_operations[i][o]-1]  # Fixed: Use current machine's processing time
+
+        # # Machine capacity constraints
+        # for m in range(1, self.num_machines + 1):  # Machines are 1-indexed
+        #     for i in range(self.num_jobs):
+        #         for k in range(self.num_jobs):
+        #             if i != k:
+        #                 # Find operations of jobs i and k on machine m
+        #                 op_i = [o for o in range(self.num_machines)
+        #                        if self.job_operations[i][o] == m]
+        #                 op_k = [o for o in range(self.num_machines)
+        #                        if self.job_operations[k][o] == m]
+                        
+        #                 if op_i and op_k:
+        #                     o_i = op_i[0]  # Job i's operation on machine m
+        #                     o_k = op_k[0]  # Job k's operation on machine m
+        #                     model += C[i, o_i] >= C[k, o_k] + self.processing_times[i][m-1] - self.big_m * (1 - y[i, o_i, k, o_k])
+        #                     model += C[k, o_k] >= C[i, o_i] + self.processing_times[k][m-1] - self.big_m * y[i, o_i, k, o_k]
+
+        # # Makespan constraint
+        # for i in range(self.num_jobs):
+        #     model += C_max >= C[i, self.num_machines - 1]
+
+        # 1. Operation precedence within jobs
         for i in range(self.num_jobs):
             for k in range(1, self.num_machines):
-                prev = self.job_operations[i][k - 1] - 1  # -1 for 0-indexing
-                curr = self.job_operations[i][k] - 1  # -1 for 0-indexing
-                model += C[i, curr] >= C[i, prev] + self.processing_times[i][prev]
+                prev_machine = self.job_operations[i][k-1] - 1
+                curr_machine = self.job_operations[i][k] - 1
+                model += C[(i, k)] >= C[(i, k-1)] + \
+                    self.processing_times[i][curr_machine]
 
-        # No overlapping constraint (job ordering)
-        for j in range(self.num_machines):
-            for i in range(self.num_jobs):
-                for i_ in range(self.num_jobs):
-                    if i != i_ and self.job_operations[i].count(j+1) and self.job_operations[i_].count(j+1):
-                        model += C[i, j] >= C[i_, j] + self.processing_times[i][j] - self.big_m * (1 - y[i, i_])
-                        model += C[i_, j] >= C[i, j] + self.processing_times[i_][j] - self.big_m * y[i, i_]
+        # 2. Machine capacity constraints
+        for m in machine_ops:
+            ops = machine_ops[m]
+            for idx1, (i, k) in enumerate(ops):
+                for idx2, (ip, kp) in enumerate(ops):
+                    if i < ip:  # Only compare each pair once
+                        model += C[(i, k)] >= C[(ip, kp)] + \
+                            self.processing_times[i][m] - \
+                            self.big_m * (1 - y[(i, k, ip, kp)])
+                        model += C[(ip, kp)] >= C[(i, k)] + \
+                            self.processing_times[ip][m] - \
+                            self.big_m * y[(i, k, ip, kp)]
 
-        # Makespan constraint
+        # 3. Makespan constraint
         for i in range(self.num_jobs):
-            last_machine = self.job_operations[i][-1] - 1  # -1 for 0-indexing
-            model += C_max >= C[i, last_machine]
+            model += C_max >= C[(i, self.num_machines-1)]
 
         return model, C, y, C_max
 
@@ -227,34 +324,75 @@ class JobShopProblem(SchedulingProblem):
         y = solution[1]
         C_max = solution[2]
 
-        C_vals = {(i, j): pulp.value(var) for (i, j), var in C.items()}
-        y_vals = {(i, i_): pulp.value(var) for (i, i_), var in y.items()}
+        # C_vals = {(i, j): pulp.value(var) for (i, j), var in C.items()}
+        # y_vals = {(i, i_): pulp.value(var) for (i, i_), var in y.items()}
+        # C_max_val = pulp.value(C_max)
+
+        C_vals = {(i, o): pulp.value(var) for (i, o), var in C.items()}
+        y_vals = {(i, o, k, o_): pulp.value(var) for (i, o, k, o_), var in y.items()}
         C_max_val = pulp.value(C_max)
 
-        # 1. Operation sequence within each job
+        # # 1. Operation sequence within each job
+        # for i in range(self.num_jobs):
+        #     for k in range(1, self.num_machines):
+        #         prev_machine = self.job_operations[i][k - 1] - 1
+        #         curr_machine = self.job_operations[i][k] - 1
+        #         if C_vals[i, curr_machine] < C_vals[i, prev_machine] + self.processing_times[i][prev_machine] - 1e-4:
+        #             return False
+
+        # # 2. No overlapping on the same machine
+        # for j in range(self.num_machines):
+        #     for i in range(self.num_jobs):
+        #         for i_ in range(self.num_jobs):
+        #             if i != i_ and (i, i_) in y_vals:
+        #                 if y_vals[i, i_] > 0.5:
+        #                     if C_vals[i_, j] < C_vals[i, j] + self.processing_times[i][j] - 1e-4:
+        #                         return False
+        #                 else:
+        #                     if C_vals[i, j] < C_vals[i_, j] + self.processing_times[i_][j] - 1e-4:
+        #                         return False
+
+        # # 3. Makespan constraint
+        # for i in range(self.num_jobs):
+        #     last_machine = self.job_operations[i][-1] - 1
+        #     if C_max_val < C_vals[i, last_machine] - 1e-4:
+        #         return False
+
+        # return True
+
+        # Tolerance for floating point comparisons
+        tol = 1e-4
+
+        # 1. Operation precedence within jobs
         for i in range(self.num_jobs):
-            for k in range(1, self.num_machines):
-                prev_machine = self.job_operations[i][k - 1] - 1
-                curr_machine = self.job_operations[i][k] - 1
-                if C_vals[i, curr_machine] < C_vals[i, prev_machine] + self.processing_times[i][prev_machine] - 1e-4:
+            for o in range(1, self.num_machines):
+                if C_vals[i, o] < C_vals[i, o-1] + self.processing_times[i][self.job_operations[i][o]-1] - tol:
                     return False
 
-        # 2. No overlapping on the same machine
-        for j in range(self.num_machines):
+        # 2. Machine capacity (no overlapping)
+        for m in range(1, self.num_machines + 1):
             for i in range(self.num_jobs):
-                for i_ in range(self.num_jobs):
-                    if i != i_ and (i, i_) in y_vals:
-                        if y_vals[i, i_] > 0.5:
-                            if C_vals[i_, j] < C_vals[i, j] + self.processing_times[i][j] - 1e-4:
-                                return False
-                        else:
-                            if C_vals[i, j] < C_vals[i_, j] + self.processing_times[i_][j] - 1e-4:
-                                return False
+                for k in range(self.num_jobs):
+                    if i != k:
+                        # Find operations of jobs i and k on machine m
+                        op_i = [o for o in range(self.num_machines) 
+                            if self.job_operations[i][o] == m]
+                        op_k = [o for o in range(self.num_machines) 
+                            if self.job_operations[k][o] == m]
+                        
+                        if op_i and op_k:
+                            o_i = op_i[0]
+                            o_k = op_k[0]
+                            if y_vals.get((i, o_i, k, o_k), 0) > 0.5:
+                                if C_vals[i, o_i] < C_vals[k, o_k] + self.processing_times[i][m-1] - tol:
+                                    return False
+                            else:
+                                if C_vals[k, o_k] < C_vals[i, o_i] + self.processing_times[k][m-1] - tol:
+                                    return False
 
         # 3. Makespan constraint
         for i in range(self.num_jobs):
-            last_machine = self.job_operations[i][-1] - 1
-            if C_max_val < C_vals[i, last_machine] - 1e-4:
+            if C_max_val < C_vals[i, self.num_machines - 1] - tol:
                 return False
 
         return True
@@ -289,9 +427,20 @@ class OpenShopProblem(SchedulingProblem):
         model = pulp.LpProblem("OpenShop", pulp.LpMinimize)
 
         # Decision variables
-        C = pulp.LpVariable.dicts("C", [(i, j) for i in range(self.num_jobs) for j in range(self.num_machines)], lowBound=0)
-        y = pulp.LpVariable.dicts("y", [(i, i_, j) for i in range(self.num_jobs) for i_ in range(self.num_jobs) if i != i_ for j in range(self.num_machines)], cat="Binary")
-        z = pulp.LpVariable.dicts("z", [(i, j, j_) for i in range(self.num_jobs) for j in range(self.num_machines) for j_ in range(self.num_machines) if j != j_], cat="Binary")
+        # C = pulp.LpVariable.dicts("C", [(i, j) for i in range(self.num_jobs) for j in range(self.num_machines)], lowBound=0)
+        # y = pulp.LpVariable.dicts("y", [(i, i_, j) for i in range(self.num_jobs) for i_ in range(self.num_jobs) if i != i_ for j in range(self.num_machines)], cat="Binary")
+        # z = pulp.LpVariable.dicts("z", [(i, j, j_) for i in range(self.num_jobs) for j in range(self.num_machines) for j_ in range(self.num_machines) if j != j_], cat="Binary")
+        # C_max = pulp.LpVariable("C_max", lowBound=0)
+        C = pulp.LpVariable.dicts("C", [(i, j) for i in range(self.num_jobs) 
+                                  for j in range(self.num_machines)], lowBound=0)
+        y = pulp.LpVariable.dicts("y", [(i, k, j) for j in range(self.num_machines)
+                                    for i in range(self.num_jobs)
+                                    for k in range(self.num_jobs)
+                                    if i < k], cat="Binary")  # i < k prevents duplicates
+        z = pulp.LpVariable.dicts("z", [(i, j, k) for i in range(self.num_jobs)
+                                    for j in range(self.num_machines)
+                                    for k in range(self.num_machines)
+                                    if j < k], cat="Binary")  # j < k prevents duplicates
         C_max = pulp.LpVariable("C_max", lowBound=0)
 
         # Objective: minimize makespan
@@ -299,25 +448,48 @@ class OpenShopProblem(SchedulingProblem):
 
         # Constraints
         # Disjunctive constraints for jobs on the same machine
+        # for j in range(self.num_machines):
+        #     for i in range(self.num_jobs):
+        #         for i_ in range(self.num_jobs):
+        #             if i != i_:
+        #                 model += C[i, j] >= C[i_, j] + self.processing_times[i][j] - self.big_m * (1 - y[i, i_, j])
+        #                 model += C[i_, j] >= C[i, j] + self.processing_times[i_][j] - self.big_m * y[i, i_, j]
+
+        # # Disjunctive constraints for jobs on different machines
+        # for i in range(self.num_jobs):
+        #     for j in range(self.num_machines):
+        #         for j_ in range(self.num_machines):
+        #             if j != j_:
+        #                 model += C[i, j] >= C[i, j_] + self.processing_times[i][j] - self.big_m * (1 - z[i, j, j_])
+        #                 model += C[i, j_] >= C[i, j] + self.processing_times[i][j_] - self.big_m * z[i, j, j_]
+
+        # # Makespan constraint
+        # for i in range(self.num_jobs):
+        #     for j in range(self.num_machines):
+        #         model += C_max >= C[i, j] + self.processing_times[i][j]
+
+        # 1. Machine capacity
         for j in range(self.num_machines):
-            for i in range(self.num_jobs):
-                for i_ in range(self.num_jobs):
-                    if i != i_:
-                        model += C[i, j] >= C[i_, j] + self.processing_times[i][j] - self.big_m * (1 - y[i, i_, j])
-                        model += C[i_, j] >= C[i, j] + self.processing_times[i_][j] - self.big_m * y[i, i_, j]
-
-        # Disjunctive constraints for jobs on different machines
+            jobs = [i for i in range(self.num_jobs)]
+            for idx_i, i in enumerate(jobs):
+                for idx_k, k in enumerate(jobs):
+                    if idx_i < idx_k:  # Compare each pair only once
+                        model += C[(i,j)] >= C[(k,j)] + self.processing_times[i][j] - self.big_m*(1 - y[(i,k,j)])
+                        model += C[(k,j)] >= C[(i,j)] + self.processing_times[k][j] - self.big_m*y[(i,k,j)]
+        
+        # 2. Job operation ordering
+        for i in range(self.num_jobs):
+            machines = [j for j in range(self.num_machines)]
+            for idx_j, j in enumerate(machines):
+                for idx_k, k in enumerate(machines):
+                    if idx_j < idx_k:  # Compare each pair only once
+                        model += C[(i,j)] >= C[(i,k)] + self.processing_times[i][j] - self.big_m*(1 - z[(i,j,k)])
+                        model += C[(i,k)] >= C[(i,j)] + self.processing_times[i][k] - self.big_m*z[(i,j,k)]
+        
+        # 3. Makespan
         for i in range(self.num_jobs):
             for j in range(self.num_machines):
-                for j_ in range(self.num_machines):
-                    if j != j_:
-                        model += C[i, j] >= C[i, j_] + self.processing_times[i][j] - self.big_m * (1 - z[i, j, j_])
-                        model += C[i, j_] >= C[i, j] + self.processing_times[i][j_] - self.big_m * z[i, j, j_]
-
-        # Makespan constraint
-        for i in range(self.num_jobs):
-            for j in range(self.num_machines):
-                model += C_max >= C[i, j] + self.processing_times[i][j]
+                model += C_max >= C[(i,j)]
 
         return model, C, y, z, C_max
 
@@ -328,39 +500,83 @@ class OpenShopProblem(SchedulingProblem):
         z = solution[2]
         C_max = solution[3]
 
+        # C_vals = {(i, j): pulp.value(var) for (i, j), var in C.items()}
+        # y_vals = {(i, i_, j): pulp.value(var) for (i, i_, j), var in y.items()}
+        # z_vals = {(i, j, j_): pulp.value(var) for (i, j, j_), var in z.items()}
+        # C_max_val = pulp.value(C_max)
+
+        # # 1. No overlapping on the same machine
+        # for j in range(self.num_machines):
+        #     for i in range(self.num_jobs):
+        #         for i_ in range(self.num_jobs):
+        #             if i != i_ and (i, i_, j) in y_vals:
+        #                 if y_vals[i, i_, j] > 0.5:
+        #                     if C_vals[i_, j] < C_vals[i, j] + self.processing_times[i][j] - 1e-4:
+        #                         return False
+        #                 else:
+        #                     if C_vals[i, j] < C_vals[i_, j] + self.processing_times[i_][j] - 1e-4:
+        #                         return False
+
+        # # 2. No overlapping within the same job
+        # for i in range(self.num_jobs):
+        #     for j in range(self.num_machines):
+        #         for j_ in range(self.num_machines):
+        #             if j != j_ and (i, j, j_) in z_vals:
+        #                 if z_vals[i, j, j_] > 0.5:
+        #                     if C_vals[i, j_] < C_vals[i, j] + self.processing_times[i][j] - 1e-4:
+        #                         return False
+        #                 else:
+        #                     if C_vals[i, j] < C_vals[i, j_] + self.processing_times[i][j_] - 1e-4:
+        #                         return False
+
+        # # 3. Makespan constraint
+        # for i in range(self.num_jobs):
+        #     for j in range(self.num_machines):
+        #         if C_max_val < C_vals[i, j] + self.processing_times[i][j] - 1e-4:
+        #             return False
+
+        # return True
+
         C_vals = {(i, j): pulp.value(var) for (i, j), var in C.items()}
-        y_vals = {(i, i_, j): pulp.value(var) for (i, i_, j), var in y.items()}
-        z_vals = {(i, j, j_): pulp.value(var) for (i, j, j_), var in z.items()}
+        y_vals = {key: pulp.value(var) for key, var in y.items()}
+        z_vals = {key: pulp.value(var) for key, var in z.items()}
         C_max_val = pulp.value(C_max)
+        tolerance = 1e-5
 
-        # 1. No overlapping on the same machine
         for j in range(self.num_machines):
-            for i in range(self.num_jobs):
-                for i_ in range(self.num_jobs):
-                    if i != i_ and (i, i_, j) in y_vals:
-                        if y_vals[i, i_, j] > 0.5:
-                            if C_vals[i_, j] < C_vals[i, j] + self.processing_times[i][j] - 1e-4:
+            jobs = [i for i in range(self.num_jobs)]
+            for idx_i, i in enumerate(jobs):
+                for idx_k, k in enumerate(jobs):
+                    if idx_i < idx_k:
+                        if y_vals.get((i,k,j), 0) > 0.5:  # i before k
+                            if C_vals[(i,j)] < C_vals[(k,j)] + self.processing_times[i][j] - tolerance:
+                                print(f"Machine {j} conflict: Job {i} should finish before {k} but {C_vals[(i,j)]} < {C_vals[(k,j)]} + {self.processing_times[i][j]}")
                                 return False
-                        else:
-                            if C_vals[i, j] < C_vals[i_, j] + self.processing_times[i_][j] - 1e-4:
+                        else:  # k before i
+                            if C_vals[(k,j)] < C_vals[(i,j)] + self.processing_times[k][j] - tolerance:
+                                print(f"Machine {j} conflict: Job {k} should finish before {i} but {C_vals[(k,j)]} < {C_vals[(i,j)]} + {self.processing_times[k][j]}")
                                 return False
-
-        # 2. No overlapping within the same job
+        
+        # 2. Verify job operation ordering
+        for i in range(self.num_jobs):
+            machines = [j for j in range(self.num_machines)]
+            for idx_j, j in enumerate(machines):
+                for idx_k, k in enumerate(machines):
+                    if idx_j < idx_k:
+                        if z_vals.get((i,j,k), 0) > 0.5:  # j before k
+                            if C_vals[(i,j)] < C_vals[(i,k)] + self.processing_times[i][j] - tolerance:
+                                print(f"Job {i} operation order: Machine {j} should finish before {k}")
+                                return False
+                        else:  # k before j
+                            if C_vals[(i,k)] < C_vals[(i,j)] + self.processing_times[i][k] - tolerance:
+                                print(f"Job {i} operation order: Machine {k} should finish before {j}")
+                                return False
+        
+        # 3. Verify makespan
         for i in range(self.num_jobs):
             for j in range(self.num_machines):
-                for j_ in range(self.num_machines):
-                    if j != j_ and (i, j, j_) in z_vals:
-                        if z_vals[i, j, j_] > 0.5:
-                            if C_vals[i, j_] < C_vals[i, j] + self.processing_times[i][j] - 1e-4:
-                                return False
-                        else:
-                            if C_vals[i, j] < C_vals[i, j_] + self.processing_times[i][j_] - 1e-4:
-                                return False
-
-        # 3. Makespan constraint
-        for i in range(self.num_jobs):
-            for j in range(self.num_machines):
-                if C_max_val < C_vals[i, j] + self.processing_times[i][j] - 1e-4:
+                if C_max_val < C_vals[(i,j)] - tolerance:
+                    print(f"Makespan violation: C_max {C_max_val} < C_{i}{j} {C_vals[(i,j)]}")
                     return False
-
+        
         return True
