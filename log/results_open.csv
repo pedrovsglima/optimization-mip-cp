@@ -1,0 +1,15 @@
+file,instance,num_jobs,num_machines,time_limit,result_status,result_objective,result_runtime,solution_is_valid,upper_bound,lower_bound
+./data/tests/openshop_tai4_4.txt,0,4,4,2700,1,117.0,0.17430686950683594,True,193,186
+./data/tests/openshop_tai4_4.txt,1,4,4,2700,1,190.0,0.36472415924072266,True,236,229
+./data/tests/openshop_tai4_4.txt,2,4,4,2700,1,182.0,0.6810905933380127,True,271,262
+./data/tests/openshop_tai4_4.txt,3,4,4,2700,1,170.0,0.8709602355957031,True,250,245
+./data/tests/openshop_tai5_5.txt,0,5,5,2700,1,243.0,10.542609214782715,True,300,295
+./data/tests/openshop_tai5_5.txt,1,5,5,2700,1,193.0,14.437926769256592,True,262,255
+./data/tests/openshop_tai7_7.txt,0,7,7,2700,1,352.0,2705.3557891845703,True,438,435
+./data/tests/openshop_tai7_7.txt,1,7,7,2700,1,429.0,2705.200833797455,True,449,443
+./data/tests/openshop_tai10_10.txt,0,10,10,2700,1,799.0,2702.2513279914856,True,652,637
+./data/tests/openshop_tai10_10.txt,1,10,10,2700,1,740.0,2703.1627368927,True,596,588
+./data/tests/openshop_tai15_15.txt,0,15,15,2700,1,1878.0,2702.413820505142,True,956,937
+./data/tests/openshop_tai15_15.txt,1,15,15,2700,1,1543.0,2701.678562402725,True,957,918
+./data/tests/openshop_tai20_20.txt,0,20,20,2700,1,2580.0,2701.1231858730316,True,1215,1155
+./data/tests/openshop_tai20_20.txt,1,20,20,2700,1,2750.0,2701.768079996109,True,1332,1241
