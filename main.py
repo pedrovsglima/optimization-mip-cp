@@ -1,5 +1,6 @@
 import os
 import toml
+import random
 import logging
 import argparse
 from src import read_instances, problems
@@ -23,6 +24,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     prob = args.prob
+    N_INSTANCES = 5
 
     image_dir = config["data"]["directory"]
 
@@ -31,6 +33,7 @@ if __name__ == "__main__":
         flowshop_prefix = config["data"]["flow_prefix"]
         flowshop_files = [os.path.join(image_dir, f)
                         for f in os.listdir(image_dir) if flowshop_prefix in f]
+        flowshop_files = random.sample(flowshop_files, k=min(N_INSTANCES, len(flowshop_files)))
 
         for file_path in flowshop_files:
             fs_instances = read_instances.FlowShop(file_path)
@@ -55,6 +58,7 @@ if __name__ == "__main__":
         jobshop_prefix = config["data"]["job_prefix"]
         jobshop_files = [os.path.join(image_dir, f)
                         for f in os.listdir(image_dir) if jobshop_prefix in f]
+        jobshop_files = random.sample(jobshop_files, k=min(N_INSTANCES, len(jobshop_files)))
 
         for file_path in jobshop_files:
             js_instances = read_instances.JobShop(file_path)
@@ -79,6 +83,8 @@ if __name__ == "__main__":
         openshop_prefix = config["data"]["open_prefix"]
         openshop_files = [os.path.join(image_dir, f)
                         for f in os.listdir(image_dir) if openshop_prefix in f]
+        openshop_files = random.sample(openshop_files, k=min(N_INSTANCES, len(openshop_files)))
+
         for file_path in openshop_files:
             os_instances = read_instances.OpenShop(file_path)
             for instance, data in enumerate(os_instances.data):
