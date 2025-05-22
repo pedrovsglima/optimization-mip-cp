@@ -7,7 +7,7 @@ import pulp
 class SchedulingProblem:
     """A class representing a scheduling problem."""
 
-    HEADER = ["file", "instance", "num_jobs", "num_machines", "time_limit", "result_status", "result_objective",
+    HEADER = ["file", "instance", "num_jobs", "num_machines", "solver", "time_limit", "result_status", "result_objective",
             "result_runtime", "upper_bound", "lower_bound", "relax_status", "relax_objective", "relax_runtime"]
 
     def __init__(self, data:dict, M:int=1e6):
@@ -22,15 +22,24 @@ class SchedulingProblem:
     def _get_model(self, is_relaxed:bool=False) -> tuple:
         raise NotImplementedError("Subclasses should implement this method.")
 
-    def solve_prob(self, time_limit:int) -> dict:
+    def solve_prob(self, time_limit:int, header:dict) -> dict:
         """Solve the flow shop scheduling problem using PuLP."""
-
-        # TODO: store optimal schedule
-        # TODO: create and save gantt chart
 
         model, *decision_vars = self._get_model()
 
-        solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=time_limit, options=[f"randomSeed {self.seed}"])
+        if header["solver"] == "cplex":
+            solver = pulp.CPLEX_CMD(
+                path=header["cplex_path"],
+                msg=False,
+                timeLimit=time_limit,
+                options=[f"randomSeed {self.seed}"]
+            )
+        else:
+            solver = pulp.PULP_CBC_CMD(
+                msg=False,
+                timeLimit=time_limit,
+                options=[f"randomSeed {self.seed}"]
+            )
 
         # solve model
         start_time = time.time()
@@ -39,22 +48,22 @@ class SchedulingProblem:
         runtime = time.time() - start_time
 
         # LP relaxation
-        model_relax, *decision_vars_relax = self._get_model(is_relaxed=True)
-        solver_relax = pulp.PULP_CBC_CMD(msg=False, options=[f"randomSeed {self.seed}"])
+        # model_relax, *decision_vars_relax = self._get_model(is_relaxed=True)
+        # solver_relax = pulp.PULP_CBC_CMD(msg=False, options=[f"randomSeed {self.seed}"])
 
         # solve model
-        start_time_relax = time.time()
-        status_relax = model_relax.solve(solver_relax)
-        objective_relax = pulp.value(model_relax.objective)
-        runtime_relax = time.time() - start_time_relax
+        # start_time_relax = time.time()
+        # status_relax = model_relax.solve(solver_relax)
+        # objective_relax = pulp.value(model_relax.objective)
+        # runtime_relax = time.time() - start_time_relax
 
         return {
             "result_status": status,
             "result_objective": objective,
             "result_runtime": runtime,
-            "relax_status": status_relax,
-            "relax_objective": objective_relax,
-            "relax_runtime": runtime_relax,
+            "relax_status": None,  # status_relax,
+            "relax_objective": None,  # objective_relax,
+            "relax_runtime": None,  # runtime_relax,
         }
 
     def save_results(

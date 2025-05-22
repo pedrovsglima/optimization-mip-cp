@@ -40,12 +40,12 @@ if __name__ == "__main__":
             for instance, data in enumerate(fs_instances.data):
                 for time_limit in config["optimization"]["time_limit"]:
 
-                    save_info = {"file": file_path, "instance": instance}
+                    save_info = {"file": file_path, "instance": instance, "solver": config["optimization"]["solver"]}
                     logger.info("-----------------------------------------")
                     logger.info("File: %s, Instance: %s", file_path, instance)
 
                     fs = problems.FlowShopProblem(data)
-                    results = fs.solve_prob(time_limit)
+                    results = fs.solve_prob(time_limit, config["optimization"])
                     logger.info("Status: %s, Objective: %s, Runtime: %s",
                                 results["result_status"],
                                 results["result_objective"],
@@ -65,12 +65,12 @@ if __name__ == "__main__":
             for instance, data in enumerate(js_instances.data):
                 for time_limit in config["optimization"]["time_limit"]:
 
-                    save_info = {"file": file_path, "instance": instance}
+                    save_info = {"file": file_path, "instance": instance, "solver": config["optimization"]["solver"]}
                     logger.info("-----------------------------------------")
                     logger.info("File: %s, Instance: %s", file_path, instance)
 
                     js = problems.JobShopProblem(data)
-                    results = js.solve_prob(time_limit)
+                    results = js.solve_prob(time_limit, config["optimization"])
                     logger.info("Status: %s, Objective: %s, Runtime: %s",
                                 results["result_status"],
                                 results["result_objective"],
@@ -90,12 +90,12 @@ if __name__ == "__main__":
             for instance, data in enumerate(os_instances.data):
                 for time_limit in config["optimization"]["time_limit"]:
 
-                    save_info = {"file": file_path, "instance": instance}
+                    save_info = {"file": file_path, "instance": instance, "solver": config["optimization"]["solver"]}
                     logger.info("-----------------------------------------")
                     logger.info("File: %s, Instance: %s", file_path, instance)
 
                     opens = problems.OpenShopProblem(data)
-                    results = opens.solve_prob(time_limit)
+                    results = opens.solve_prob(time_limit, config["optimization"])
                     logger.info("Status: %s, Objective: %s, Runtime: %s",
                                 results["result_status"],
                                 results["result_objective"],
