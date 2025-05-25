@@ -6,8 +6,13 @@ open_prefix = "openshop_"
 
 [optimization]
 time_limit = [15, 30]  # in seconds
+[optimization.mip]
 solver = "cplex"  # cplex or cbc
 cplex_path = "/opt/ibm/ILOG/CPLEX_Studio2211/cplex/bin/x86-64_linux/cplex"
+[optimization.cp]
+cpoptimizer_agent = "local"
+cpoptimizer_path = "/opt/ibm/ILOG/CPLEX_Studio2211/cpoptimizer/bin/x86-64_linux/cpoptimizer"
 
 [results]
-csv_path = "./log/results.csv"
+mip_csv_path = "./log/results_mip.csv"
+cp_csv_path = "./log/results_cp.csv"
